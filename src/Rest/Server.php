@@ -27,7 +27,7 @@ include_once 'View/Generic.php';
 include_once 'View/JSon.php';
 
 /**
-* Class Rest\Server 
+* Class Rest\Server
 * Is the front controller for mapping URL to controllers and dealing with Request/Response and Headers
 * Made with Restful webservices in mind.
 * By Diogo Souza da Silva <manifesto@manifesto.blog.br>
@@ -39,7 +39,7 @@ class Server {
     private $request ;
     private $authenticator ;
 
-    private $baseUrl ; 
+    private $baseUrl ;
     private $query ;
 
     private $map ;
@@ -102,7 +102,7 @@ class Server {
         return $this->params[$key];
     }
 
-   /** 
+   /**
     * Maps a Method and URL for a Class
     * @param string $method The method to be associated
     * @param string $uri The URL to be accossiated
@@ -175,9 +175,9 @@ class Server {
     * @param $k uri part
     * @return string
     **/
-    public function getQuery($k=null) { 
+    public function getQuery($k=null) {
         return $this->getRequest()->getURI($k);
-    }  
+    }
 
    /**
     * Get the baseurl, based on website location (eg. localhost/website or website.com/);
@@ -222,6 +222,7 @@ class Server {
         if(count($this->map) < 1) { return false; }
         if($ext === false) $ext = '*';
         else  $uri = substr($uri,0,strlen($uri) - strlen($ext) - 1);
+
         foreach($this->map as $pattern=>$options) {
             $parts = explode("/",$pattern) ;
             $map = array() ;
@@ -234,6 +235,13 @@ class Server {
                     $map[] = $part;
                 }
             }
+            /*
+            $mapstr = implode("/", $map);
+
+            echo $uri . PHP_EOL;
+            echo $mapstr . PHP_EOL;
+            */
+
             if(preg_match("%^".implode("/", $map )."$%",$uri)) {
                 if(isset($this->map[$pattern][strtoupper($method)][$ext])) {
                     $this->setMatch($parts);
@@ -277,16 +285,54 @@ class Server {
 
    /**
     * Return last class name from Rest\Server stack trace
-    * @return string 
+    * @return string
     */
     public function lastClass() {
         $i = count($this->stack);
         return $this->stack[$i - 1];
     }
 
+    public function unittest_execute($method="GET", $url="", $extension="", $echo=true){
+        if(!$this->getAuthenticator()->tryAuthenticate()) {
+            $this->getResponse()->showHeader(); // Call headers, if no yet
+            echo $this->getResponse()->getResponse();
+            return $this;
+        }
+
+        $response = $this->getMap($method, $url, $extension);
+
+        if(!is_string($response ) && is_callable($response)) {
+            $object = new Controller\Generic($response);
+            $method = "execute";
+        } else if(is_string($response))  {
+            $response = explode("::",$response);
+            if(count($response) == 2) {
+                $object =  new $response[0];
+                $method = $response[1];
+            } else {
+                $object = new $response[0];
+                $method = "execute";
+            }
+        }
+
+        $this->call($object,$method);
+
+        if(!$this->getResponse()->headerSent())
+            $this->getResponse()->showHeader(); // Call headers, if no yet
+
+        $r = $this->getResponse()->getResponse();
+        if($echo && strlen($r) >= 1) {
+            if($method == "GET" || $method == "HEAD") {
+                $this->getResponse()->addheader("E-Tag: ".md5($r));
+            }
+            echo $r;
+        }
+        return $this;
+    }
+
    /**
     * Run the Server to handle the request and prepare the response
-    * @return Rest\Server 
+    * @return Rest\Server
     */
     public function execute($echo=true) {
         if(!$this->getAuthenticator()->tryAuthenticate()) {
@@ -313,6 +359,7 @@ class Server {
         }
 
         $this->call($object,$method);
+
         if(!$this->getResponse()->headerSent()) $this->getResponse()->showHeader(); // Call headers, if no yet
         $r = $this->getResponse()->getResponse();
         if($echo && strlen($r) >= 1) {
@@ -324,7 +371,7 @@ class Server {
         return $this;
     }
 
-    private function call($object,$method) {             
+    private function call($object,$method) {
         $this->stack[] = get_class($object) ;
         if(!($object instanceof Action)) {
             Throw new \Exception(get_class($object)." is not a Rest\\Action");
@@ -339,5 +386,3 @@ class Server {
     }
 
 }
-
-
